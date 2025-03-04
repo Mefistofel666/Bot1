@@ -1,0 +1,70 @@
+import telebot
+import json
+import os
+
+# Токен вашего бота (замените на свой)
+TOKEN = "7758385880:AAHIjIUQluBoo3tIBlZpveImswaGvXt3lSU"
+
+# Путь к файлу с товарами (JSON)
+products_file = "products.json"
+
+bot = telebot.TeleBot(TOKEN)
+
+def load_products():
+    try:
+        with open(products_file, 'r') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        print("Файл products.json не найден. Создайте его.")
+        return []
+    except json.JSONDecodeError as e:
+        print(f"Ошибка при разборе JSON: {e}")
+        return []
+
+def display_products(products):
+    if not products:
+        return "К сожалению, пока нет доступных товаров."
+    text = "Доступные товары:\n"
+    for i, product in enumerate(products):
+        text += f"{i + 1}. {product['name']} - {product['price']} руб. \n"
+        text += f"Описание: {product['description']}\n"
+        text += "---------------------\n"
+    return text
+
+@bot.message_handler(commands=['start'])
+def start(message):
+    products = load_products()
+    text = display_products(products)
+    bot.reply_to(message, text)
+
+@bot.message_handler(func=lambda message: message.text.isdigit())
+def handle_choice(message):
+    products = load_products()
+    try:
+        choice = int(message.text) - 1
+        if 0 <= choice < len(products):
+            product = products[choice]
+            reply_markup = telebot.types.ReplyKeyboardMarkup(resize_keyboard=True)
+            reply_markup.add("Да", "Нет")
+            bot.reply_to(message, f"Вы выбрали: {product['name']}\nЦена: {product['price']} руб.\nОписание: {product['description']}\n\nПодтвердить заказ?", reply_markup=reply_markup)
+            bot.register_next_step_handler(message, confirm_order, product)
+        else:
+            bot.reply_to(message, "Неверный выбор товара.")
+    except ValueError:
+        bot.reply_to(message, "Неверный ввод. Введите номер товара.")
+
+def confirm_order(message, product):
+    if message.text.lower() == "да":
+        bot.reply_to(message, f"Спасибо за заказ {product['name']}! Ваш заказ принят.")
+    elif message.text.lower() == "нет":
+        bot.reply_to(message, "Заказ отменен.")
+    else:
+        bot.reply_to(message, "Неверный ввод. Введите да или нет.")
+
+
+# Загрузка товаров при запуске бота
+products = load_products()
+
+# Запуск бота
+bot.polling()
+
